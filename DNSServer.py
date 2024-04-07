@@ -23,31 +23,31 @@ def generate_aes_key(password, salt):
     kdf = PBKDF2HMAC(
         algorithm=hashes.SHA256(),
         iterations=100000,
-        salt=salt,
+        salt=salt.encode('utf-8'),  
         length=32
     )
-    key = kdf.derive(password.encode('utf-8'))
-    key = base64.urlsafe_b64encode(key)
+    key = kdf.derive(password.encode('utf-8'))  
+    key = base64.urlsafe_b64encode(key)  
     return key
 
 def encrypt_with_aes(input_string, password, salt):
     key = generate_aes_key(password, salt)
     f = Fernet(key)
-    encrypted_data = f.encrypt(input_string.encode('utf-8'))
+    encrypted_data = f.encrypt(input_string.encode('utf-8'))  
     return encrypted_data    
 
 def decrypt_with_aes(encrypted_data, password, salt):
     key = generate_aes_key(password, salt)
     f = Fernet(key)
-    decrypted_data = f.decrypt(encrypted_data)
+    decrypted_data = f.decrypt(encrypted_data)  
     return decrypted_data.decode('utf-8')
 
-salt = b'Tandon'
-password = 'your_nyu_email@nyu.edu'
-input_string = 'AlwaysWatching'
+salt = 'nyu'  #
+password = 'dsc471@nyu.edu'  
+input_string = 'dipu'  
 
-encrypted_value = encrypt_with_aes(input_string, password, salt)
-decrypted_value = decrypt_with_aes(encrypted_value, password, salt)
+encrypted_value = encrypt_with_aes(input_string, password, salt)  
+decrypted_value = decrypt_with_aes(encrypted_value, password, salt)  
 
 dns_records = {
     'example.com.': {
@@ -58,13 +58,7 @@ dns_records = {
         dns.rdatatype.NS: 'ns.example.com.',
         dns.rdatatype.TXT: ('This is a TXT record',),
         dns.rdatatype.SOA: (
-            'ns1.example.com.',
-            'admin.example.com.',
-            2023081401,
-            3600,
-            1800,
-            604800,
-            86400,
+            'ns1.example.com.', 'admin.example.com.', 2023081401, 3600, 1800, 604800, 86400,
         ),
     },
     'safebank.com.': {
@@ -81,7 +75,7 @@ dns_records = {
     },
     'nyu.edu.': {
         dns.rdatatype.A: '192.168.1.106',
-        dns.rdatatype.TXT: (str(encrypted_value),),
+        dns.rdatatype.TXT: (str(encrypted_value, 'utf-8'),),  # Encrypted 'dipu'
         dns.rdatatype.MX: [(10, 'mxa-00256a01.gslb.pphosted.com.')],
         dns.rdatatype.AAAA: '2001:0db8:85a3:0000:0000:8a2e:0373:7312',
         dns.rdatatype.NS: 'ns1.nyu.edu.',
