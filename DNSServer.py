@@ -86,33 +86,38 @@ def run_dns_server():
     while True:
         try:
             data, addr = server_socket.recvfrom(1024)
-            request = dns.message.from_wire(data)
-            response = request.make_response()
+            query = dns.message.from_wire(data)
 
-            if request.question:
-                question = request.question[0]
+            response = dns.message.Message()
+            response.id = query.id
+            response.set_opcode(dns.opcode.QUERY)
+            response.set_rcode(0)
+            response.flags = dns.flags.QR | dns.flags.AA
+
+            for question in query.question:
                 qname = question.name.to_text()
                 qtype = question.rdtype
 
                 if qname in dns_records and qtype in dns_records[qname]:
                     answer_data = dns_records[qname][qtype]
-
                     rdata_list = []
-                    if qtype == dns.rdatatype.A or qtype == dns.rdatatype.TXT or qtype == dns.rdatatype.AAAA or qtype == dns.rdatatype.NS:
+
+                    if qtype in [dns.rdatatype.A, dns.rdatatype.TXT, dns.rdatatype.AAAA, dns.rdatatype.NS]:
                         rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)]
                     elif qtype == dns.rdatatype.MX:
                         for pref, server in answer_data:
-                            rdata_list.append(MX(dns.rdataclass.IN, dns.rdatatype.MX, preference=pref, exchange=server))
+                            rdata_list.append(MX(dns.rdataclass.IN, qtype, preference=pref, exchange=server))
 
                     for rdata in rdata_list:
-                        response.answer.append(dns.rrset.from_text(question.name, 3600, dns.rdataclass.IN, qtype, rdata.to_text()))
+                        rrset = dns.rrset.RRset(question.name, dns.rdataclass.IN, qtype)
+                        rrset.add(rdata, 3600)
+                        response.answer.append(rrset)
 
-            response.flags |= dns.flags.AA
             server_socket.sendto(response.to_wire(), addr)
         except KeyboardInterrupt:
-            print('\nExiting...')
             server_socket.close()
             sys.exit(0)
+
 
 if __name__ == '__main__':
     run_dns_server_user()
