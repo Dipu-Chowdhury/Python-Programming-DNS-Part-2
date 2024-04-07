@@ -14,24 +14,28 @@ from cryptography.fernet import Fernet
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
+from cryptography.hazmat.backends import default_backend
 
-def generate_aes_key(password, salt):
-    kdf = PBKDF2HMAC(algorithm=hashes.SHA256(), iterations=100000, salt=salt, length=32)
-    key = kdf.derive(password.encode('utf-8'))
-    key = base64.urlsafe_b64encode(key)
+def generate_aes_key(password: str, salt: bytes) -> bytes:
+    kdf = PBKDF2HMAC(
+        algorithm=hashes.SHA256(),
+        length=32,
+        salt=salt,
+        iterations=100000,
+        backend=default_backend()
+    )
+    key = base64.urlsafe_b64encode(kdf.derive(password.encode()))
     return key
 
-def encrypt_with_aes(input_string, password, salt):
+def encrypt_with_aes(input_string: str, password: str, salt: bytes) -> bytes:
     key = generate_aes_key(password, salt)
-    f = Fernet(key)
-    encrypted_data = f.encrypt(input_string.encode('utf-8'))
-    return encrypted_data    
+    fernet = Fernet(key)
+    return fernet.encrypt(input_string.encode())
 
-def decrypt_with_aes(encrypted_data, password, salt):
+def decrypt_with_aes(encrypted_data: bytes, password: str, salt: bytes) -> str:
     key = generate_aes_key(password, salt)
-    f = Fernet(key)
-    decrypted_data = f.decrypt(encrypted_data)
-    return decrypted_data.decode('utf-8')
+    fernet = Fernet(key)
+    return fernet.decrypt(encrypted_data).decode()
 
 salt = b'Tandon'
 password = 'dsc471@nyu.edu'
@@ -93,4 +97,4 @@ def run_dns_server():
         server_socket.sendto(response.to_wire(), addr)
 
 if __name__ == '__main__':
-    run_dns_server()
+    run_dns_server_user()
