@@ -84,39 +84,45 @@ def run_dns_server():
     server_socket.bind(('127.0.0.1', 53))
 
     while True:
-        try:
-            data, addr = server_socket.recvfrom(1024)
-            query = dns.message.from_wire(data)
+        data, addr = server_socket.recvfrom(512)
+        query = dns.message.from_wire(data)
 
-            response = dns.message.Message()
-            response.id = query.id
-            response.set_opcode(dns.opcode.QUERY)
-            response.set_rcode(0)
-            response.flags = dns.flags.QR | dns.flags.AA
+        response = dns.message.Message()
+        response.id = query.id
+        response.set_opcode(dns.opcode.QUERY)
+        response.set_rcode(0)
+        response.flags = dns.flags.QR | dns.flags.AA
 
-            for question in query.question:
-                qname = question.name.to_text()
-                qtype = question.rdtype
+        for question in query.question:
+            qname = question.name.to_text()
+            qtype = question.rdtype
 
-                if qname in dns_records and qtype in dns_records[qname]:
+            if qname in dns_records:
+                if qtype in dns_records[qname]:
                     answer_data = dns_records[qname][qtype]
                     rdata_list = []
-
-                    if qtype in [dns.rdatatype.A, dns.rdatatype.TXT, dns.rdatatype.AAAA, dns.rdatatype.NS]:
-                        rdata_list = [dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)]
-                    elif qtype == dns.rdatatype.MX:
+                    if qtype == dns.rdatatype.MX:
                         for pref, server in answer_data:
-                            rdata_list.append(MX(dns.rdataclass.IN, qtype, preference=pref, exchange=server))
+                            rdata = MX(dns.rdataclass.IN, dns.rdatatype.MX, preference=pref, exchange=server)
+                            rdata_list.append(rdata)
+                    elif qtype == dns.rdatatype.SOA:
+                        mname, rname, serial, refresh, retry, expire, minimum = answer_data
+                        rdata = SOA(dns.rdataclass.IN, dns.rdatatype.SOA, mname, rname, serial, refresh, retry, expire, minimum)
+                        rdata_list.append(rdata)
+                    else:
+                        rdata = dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)
+                        rdata_list.append(rdata)
 
                     for rdata in rdata_list:
                         rrset = dns.rrset.RRset(question.name, dns.rdataclass.IN, qtype)
                         rrset.add(rdata, 3600)
                         response.answer.append(rrset)
+                else:
+                    response.set_rcode(dns.rcode.NXDOMAIN)
+            else:
+                response.set_rcode(dns.rcode.NXDOMAIN)
 
-            server_socket.sendto(response.to_wire(), addr)
-        except KeyboardInterrupt:
-            server_socket.close()
-            sys.exit(0)
+        server_socket.sendto(response.to_wire(), addr)
 
 
 if __name__ == '__main__':
