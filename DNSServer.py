@@ -45,63 +45,41 @@ encrypted_value = encrypt_with_aes(input_string, password, salt)
 decrypted_value = decrypt_with_aes(encrypted_value, password, salt)
 
 dns_records = {
-    'example.com.': {
-        dns.rdatatype.A: '192.168.1.101',
-    },
-    'safebank.com.': { dns.rdatatype.A: '192.168.1.102' },
-    'google.com.': { dns.rdatatype.A: '192.168.1.103' },
-    'legitsite.com.': { dns.rdatatype.A: '192.168.1.104' },
-    'yahoo.com.': { dns.rdatatype.A: '192.168.1.105' },
+    'example.com.': {'A': '192.168.1.101'},
+    'safebank.com.': {'A': '192.168.1.102'},
+    'google.com.': {'A': '192.168.1.103'},
+    'legitsite.com.': {'A': '192.168.1.104'},
+    'yahoo.com.': {'A': '192.168.1.105'},
     'nyu.edu.': {
-        dns.rdatatype.A: '192.168.1.106',
-        dns.rdatatype.TXT: encrypted_value.decode('utf-8'),
-        dns.rdatatype.MX: [(10, 'mxa-00256a01.gslb.pphosted.com.')],
-        dns.rdatatype.AAAA: '2001:0db8:85a3:0000:0000:8a2e:0373:7312',
-        dns.rdatatype.NS: 'ns1.nyu.edu.',
+        'A': '192.168.1.106',
+        'TXT': encrypted_value.decode('utf-8'),  # Encrypted 'AlwaysWatching'
+        'MX': '10 mxa-00256a01.gslb.pphosted.com.',
+        'AAAA': '2001:0db8:85a3:0000:0000:8a2e:0373:7312',
+        'NS': 'ns1.nyu.edu.',
     }
 }
 
 def run_dns_server():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP protocol
-    server_socket.bind(('127.0.0.1', 53))  # DNS typically uses port 53
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    server_socket.bind(('127.0.0.1', 53))
 
     while True:
-        try:
-            data, addr = server_socket.recvfrom(512)  # DNS requests typically don't exceed 512 bytes
-            query = dns.message.from_wire(data)
-            response = dns.message.make_response(query)
+        data, addr = server_socket.recvfrom(512)
+        query = dns.message.from_wire(data)
+        response = dns.message.make_response(query)
 
-            for question in query.question:
-                qname = question.name.to_text()
-                qtype = question.rdtype
-                domain_records = dns_records.get(qname)
+        for question in query.question:
+            qname = question.name.to_text()
+            qtype = dns.rdatatype.to_text(question.rdtype)
 
-                if domain_records and qtype in domain_records:
-                    answer_data = domain_records[qtype]
-                    if qtype == dns.rdatatype.A:
-                        for ip in answer_data if isinstance(answer_data, list) else [answer_data]:
-                            response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'A', ip))
-                    elif qtype == dns.rdatatype.TXT:
-                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'TXT', answer_data))
-                    elif qtype == dns.rdatatype.MX:
-                        preference, exchange = answer_data
-                        mx_record = MX(dns.rdataclass.IN, dns.rdatatype.MX, preference, dns.name.from_text(exchange))
-                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'MX', mx_record.to_text()))
-                    elif qtype == dns.rdatatype.AAAA:
-                        for ip in answer_data if isinstance(answer_data, list) else [answer_data]:
-                            response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'AAAA', ip))
-                    elif qtype == dns.rdatatype.NS:
-                        ns_record = NS(dns.rdataclass.IN, dns.rdatatype.NS, dns.name.from_text(answer_data))
-                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'NS', ns_record.to_text()))
-                else:
-                    response.set_rcode(dns.rcode.NXDOMAIN)
+            if qname in dns_records and qtype in dns_records[qname]:
+                answer_data = dns_records[qname][qtype]
+                rdata = dns.rdata.from_text(dns.rdataclass.IN, question.rdtype, answer_data)
+                response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, qtype, rdata.to_text()))
+            else:
+                response.set_rcode(dns.rcode.NXDOMAIN)
 
-            server_socket.sendto(response.to_wire(), addr)
-
-        except KeyboardInterrupt:
-            print('\nExiting...')
-            server_socket.close()
-            break
+        server_socket.sendto(response.to_wire(), addr)
 
 def run_dns_server_user():
     print("Input 'q' and hit 'enter' to quit")
