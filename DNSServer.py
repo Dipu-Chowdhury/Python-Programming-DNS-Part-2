@@ -96,5 +96,22 @@ def run_dns_server():
 
         server_socket.sendto(response.to_wire(), addr)
 
+def run_dns_server_user():
+    print("Input 'q' and hit 'enter' to quit")
+    print("DNS server is running...")
+
+    def user_input():
+        while True:
+            cmd = input()
+            if cmd.lower() == 'q':
+                print('Quitting...')
+                os.kill(os.getpid(), signal.SIGINT)
+
+    input_thread = threading.Thread(target=user_input)
+    input_thread.daemon = True
+    input_thread.start()
+    run_dns_server()
+
+
 if __name__ == '__main__':
     run_dns_server_user()
