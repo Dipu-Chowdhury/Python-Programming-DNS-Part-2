@@ -62,39 +62,46 @@ dns_records = {
 }
 
 def run_dns_server():
-    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    server_socket.bind(('127.0.0.1', 53))
+    server_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)  # UDP protocol
+    server_socket.bind(('127.0.0.1', 53))  # DNS typically uses port 53
 
     while True:
-        data, addr = server_socket.recvfrom(1024)
-        query = dns.message.from_wire(data)
-        response = dns.message.make_response(query)
-        
-        for question in query.question:
-            qname = question.name.to_text()
-            qtype = question.rdtype
+        try:
+            data, addr = server_socket.recvfrom(512)  # DNS requests typically don't exceed 512 bytes
+            query = dns.message.from_wire(data)
+            response = dns.message.make_response(query)
 
-            if qname in dns_records:
-                domain_records = dns_records[qname]
-                if qtype in domain_records:
+            for question in query.question:
+                qname = question.name.to_text()
+                qtype = question.rdtype
+                domain_records = dns_records.get(qname)
+
+                if domain_records and qtype in domain_records:
                     answer_data = domain_records[qtype]
-                    if isinstance(answer_data, list):
-                        for item in answer_data:
-                            if qtype == dns.rdatatype.MX:
-                                preference, exchange = item
-                                rdata = MX(dns.rdataclass.IN, qtype, preference, exchange)
-                            else:
-                                rdata = dns.rdata.from_text(dns.rdataclass.IN, qtype, item)
-                            response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, qtype, rdata.to_text()))
-                    else:
-                        rdata = dns.rdata.from_text(dns.rdataclass.IN, qtype, answer_data)
-                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, qtype, rdata.to_text()))
+                    if qtype == dns.rdatatype.A:
+                        for ip in answer_data if isinstance(answer_data, list) else [answer_data]:
+                            response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'A', ip))
+                    elif qtype == dns.rdatatype.TXT:
+                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'TXT', answer_data))
+                    elif qtype == dns.rdatatype.MX:
+                        preference, exchange = answer_data
+                        mx_record = MX(dns.rdataclass.IN, dns.rdatatype.MX, preference, dns.name.from_text(exchange))
+                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'MX', mx_record.to_text()))
+                    elif qtype == dns.rdatatype.AAAA:
+                        for ip in answer_data if isinstance(answer_data, list) else [answer_data]:
+                            response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'AAAA', ip))
+                    elif qtype == dns.rdatatype.NS:
+                        ns_record = NS(dns.rdataclass.IN, dns.rdatatype.NS, dns.name.from_text(answer_data))
+                        response.answer.append(dns.rrset.from_text(qname, 3600, dns.rdataclass.IN, 'NS', ns_record.to_text()))
                 else:
-                    response.set_rcode(dns.rcode.SERVFAIL)
-            else:
-                response.set_rcode(dns.rcode.NXDOMAIN)
+                    response.set_rcode(dns.rcode.NXDOMAIN)
 
-        server_socket.sendto(response.to_wire(), addr)
+            server_socket.sendto(response.to_wire(), addr)
+
+        except KeyboardInterrupt:
+            print('\nExiting...')
+            server_socket.close()
+            break
 
 def run_dns_server_user():
     print("Input 'q' and hit 'enter' to quit")
